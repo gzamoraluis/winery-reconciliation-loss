@@ -2,171 +2,61 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Winery Loss Reconciliation</title>
-
-<style>
-body { font-family: Arial; margin: 20px; }
-table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-td, th { border: 1px solid #ccc; padding: 6px; text-align: center; }
-input { width: 80px; }
-button { margin: 10px 5px; padding: 6px 12px; }
-
-.good { color: green; }
-.bad { color: red; }
-
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Winery App</title>
+<link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-<h2>Winery Reconciliation (LOSS ONLY)</h2>
+<div class="app">
 
-<h3>Inputs</h3>
-Gal / Barrel: <input id="galPerBarrel" value="59"><br>
-Total Lees: <input id="lees" value="15"><br>
-Final Target: <input id="target" value="8662"><br>
+  <h2>🍷 Reconciliation</h2>
 
-<h3>Lotes</h3>
-<table id="lotesTable">
-<tr>
-<th>Lote</th>
-<th>Barriles</th>
-<th>Antes</th>
-<th>Lees</th>
-<th>Despues</th>
-<th>Total Lote</th>
-<th>Acumulado</th>
-<th>Pérdida</th>
-</tr>
-</table>
+  <div class="card">
+    <label>Gal / Barrel</label>
+    <input id="galPerBarrel" value="59">
 
-<button onclick="addLote()">+ Lote</button>
+    <label>Total Lees</label>
+    <input id="lees" value="15">
 
-<h3>Contenedores</h3>
-<table id="contTable">
-<tr><th>Galones</th></tr>
-</table>
+    <label>Final Target</label>
+    <input id="target" value="8662">
+  </div>
 
-<button onclick="addContainer()">+ Contenedor</button>
+  <div class="card">
+    <h3>Lotes</h3>
+    <table id="lotesTable">
+      <tr>
+        <th>#</th>
+        <th>Br</th>
+        <th>Base</th>
+        <th>Lees</th>
+        <th>Adj</th>
+        <th>Loss</th>
+        <th>Total</th>
+      </tr>
+    </table>
 
-<br><br>
-<button onclick="calculate()">Calcular</button>
+    <button onclick="addLote()">+ Lote</button>
+  </div>
 
-<div id="report" style="margin-top:20px;"></div>
+  <div class="card">
+    <h3>Contenedores</h3>
+    <table id="contTable">
+      <tr><th>Gal</th></tr>
+    </table>
 
-<script>
+    <button onclick="addContainer()">+ Cont</button>
+  </div>
 
-// Añadir lote
-function addLote() {
-    let table = document.getElementById("lotesTable");
-    let row = table.insertRow();
-    let index = table.rows.length - 1;
+  <button class="main-btn" onclick="calculate()">Calcular</button>
 
-    row.innerHTML = `
-        <td>${index}</td>
-        <td><input type="number" value="0"></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-    `;
-}
+  <div id="report" class="card"></div>
 
-// Añadir contenedor
-function addContainer() {
-    let table = document.getElementById("contTable");
-    let row = table.insertRow();
-    row.innerHTML = `<td><input type="number" value="0"></td>`;
-}
+</div>
 
-// Cálculo principal
-function calculate() {
-
-    let gal = parseFloat(document.getElementById("galPerBarrel").value);
-    let lees = parseFloat(document.getElementById("lees").value);
-    let target = parseFloat(document.getElementById("target").value);
-
-    let table = document.getElementById("lotesTable");
-    let rows = table.rows;
-
-    let barrilesTotal = 0;
-
-    // Total barriles
-    for (let i = 1; i < rows.length; i++) {
-        barrilesTotal += parseFloat(rows[i].cells[1].children[0].value) || 0;
-    }
-
-    let baseTotal = 0;
-
-    // Primera pasada
-    for (let i = 1; i < rows.length; i++) {
-
-        let barriles = parseFloat(rows[i].cells[1].children[0].value) || 0;
-
-        let base = barriles * gal;
-
-        let leesShare = barrilesTotal ? -(barriles / barrilesTotal) * lees : 0;
-
-        let adjusted = base + leesShare;
-
-        rows[i].cells[2].innerText = base.toFixed(1);
-        rows[i].cells[3].innerText = leesShare.toFixed(1);
-        rows[i].cells[4].innerText = adjusted.toFixed(1);
-
-        baseTotal += adjusted;
-    }
-
-    // Contenedores
-    let contTable = document.getElementById("contTable");
-    let contTotal = 0;
-
-    for (let i = 1; i < contTable.rows.length; i++) {
-        contTotal += parseFloat(contTable.rows[i].cells[0].children[0].value) || 0;
-    }
-
-    // 🔴 SOLO PÉRDIDA
-    let lossTotal = (baseTotal + contTotal) - target;
-
-    if (lossTotal < 0) {
-        lossTotal = 0; // nunca ganancia
-    }
-
-    let accumulated = 0;
-
-    // Segunda pasada
-    for (let i = 1; i < rows.length; i++) {
-
-        let adjusted = parseFloat(rows[i].cells[4].innerText) || 0;
-
-        let loss = baseTotal ? (adjusted / baseTotal) * lossTotal : 0;
-
-        let total = adjusted - loss;
-
-        accumulated += total;
-
-        rows[i].cells[5].innerText = loss.toFixed(1);
-        rows[i].cells[6].innerText = total.toFixed(1);
-        rows[i].cells[7].innerText = accumulated.toFixed(1);
-    }
-
-    let finalTotal = accumulated + contTotal;
-    let check = finalTotal - target;
-
-    document.getElementById("report").innerHTML = `
-        <b>Total Lotes:</b> ${accumulated.toFixed(1)}<br>
-        <b>Contenedores:</b> ${contTotal.toFixed(1)}<br>
-        <b>FINAL:</b> ${finalTotal.toFixed(1)}<br>
-        <b>Target:</b> ${target}<br>
-        <b>Check:</b> 
-        <span class="${Math.abs(check) < 0.1 ? 'good' : 'bad'}">
-        ${check.toFixed(1)}
-        </span>
-    `;
-}
-
-</script>
+<script src="script.js"></script>
 
 </body>
 </html>
