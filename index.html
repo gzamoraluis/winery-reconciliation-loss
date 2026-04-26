@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Winery Loss Reconciliation</title>
+
+<style>
+body { font-family: Arial; margin: 20px; }
+table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+td, th { border: 1px solid #ccc; padding: 6px; text-align: center; }
+input { width: 80px; }
+button { margin: 10px 5px; padding: 6px 12px; }
+.good { color: green; }
+.bad { color: red; }
+</style>
+</head>
+
+<body>
+
+<h2>Winery Loss Reconciliation (Excel-Accurate)</h2>
+
+<h3>Inputs</h3>
+Gal / Barrel: <input id="galPerBarrel" value="59"><br>
+Total Lees: <input id="lees" value="15"><br>
+Final Target: <input id="target" value="8400"><br>
+
+<h3>Lotes</h3>
+<table id="lotesTable">
+<tr>
+<th>Lote</th>
+<th>Barriles</th>
+<th>Base</th>
+<th>Lees</th>
+<th>Base Ajustada</th>
+<th>Pérdida</th>
+<th>Total Lote</th>
+<th>Acumulado</th>
+</tr>
+</table>
+
+<button onclick="addLote()">+ Lote</button>
+
+<h3>Contenedores</h3>
+<table id="contTable">
+<tr><th>Galones</th></tr>
+</table>
+
+<button onclick="addContainer()">+ Contenedor</button>
+
+<button onclick="calculate()">Calcular</button>
+
+<h3>Reporte</h3>
+<div id="report"></div>
+
+<script>
+
+// ---------- HELPERS ----------
+function display(n) {
+    return (Math.round(n * 10) / 10).toFixed(1);
+}
+
+// ---------- UI ----------
+function addLote() {
+    let table = document.getElementById("lotesTable");
+    let row = table.insertRow();
+    let index = table.rows.length - 1;
+
+    row.innerHTML = `
+        <td>${index}</td>
+        <td><input type="number" value="0"></td>
+        <td></td><td></td><td></td><td></td><td></td><td></td>
+    `;
+}
+
+function addContainer() {
+    let table = document.getElementById("contTable");
+    let row = table.insertRow();
+    row.innerHTML = `<td><input type="number" value="0"></td>`;
+}
+
+// ---------- CORE ENGINE ----------
+function calculate() {
+
+    let gal = parseFloat(document.getElementById("galPerBarrel").value);
+    let lees = parseFloat(document.getElementById("lees").value);
+    let target = parseFloat(document.getElementById("target").value);
+
+    let rows = document.getElementById("lotesTable").rows;
+
+    let barrilesTotal = 0;
+    let adjusted = [];
+
+    // ---- TOTAL BARRILES ----
+    for (let i = 1; i < rows.length; i++) {
+        barrilesTotal += parseFloat(rows[i].cells[1].children[0].value) || 0;
+    }
+
+    let baseTotal = 0;
+
+    // ---- BASE + LEES (NO ROUNDING) ----
+    for (let i = 1; i < rows.length; i++) {
+
+        let barriles = parseFloat(rows[i].cells[1].children[0].value) || 0;
+
+        let base = barriles * gal;
+        let leesShare = barrilesTotal ? -(barriles / barrilesTotal) * lees : 0;
+        let adj = base + leesShare;
+
+        adjusted[i] = adj;
+        baseTotal += adj;
+
+        // DISPLAY ONLY
+        rows[i].cells[2].innerText = display(base);
+        rows[i].cells[3].innerText = display(leesShare);
+        rows[i].cells[4].innerText = display(adj);
+    }
+
+    // ---- CONTENEDORES ----
+    let contRows = document.getElementById("contTable").rows;
+    let contTotal = 0;
+
+    for (let i = 1; i < contRows.length; i++) {
+        contTotal += parseFloat(contRows[i].cells[0].children[0].value) || 0;
+    }
+
+    let systemTotal = baseTotal + contTotal;
+
+    // ---- VALIDATION ----
+    if (target > systemTotal) {
+        document.getElementById("report").innerHTML =
+            "<span class='bad'>ERROR: Target greater than available volume (gain not allowed)</span>";
+        return;
+    }
+
+    let lossTotal = systemTotal - target;
+
+    let loss = [];
+    let totals = [];
+    let accumulated = 0;
+
+    // ---- DISTRIBUTE LOSS ----
+    for (let i = 1; i < rows.length; i++) {
+
+        let l = baseTotal ? (adjusted[i] / baseTotal) * lossTotal : 0;
+        let t = adjusted[i] - l;
+
+        loss[i] = l;
+        totals[i] = t;
+    }
+
+    // ---- FORCE PERFECT MATCH (EXCEL STYLE) ----
+    let calcTotal = totals.slice(1).reduce((a, b) => a + b, 0) + contTotal;
+    let diff = calcTotal - target;
+
+    if (Math.abs(diff) > 0.000001) {
+        totals[rows.length - 1] -= diff;
+        loss[rows.length - 1] += diff;
+    }
+
+    // ---- FINAL DISPLAY ----
+    accumulated = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+
+        accumulated += totals[i];
+
+        rows[i].cells[5].innerText = display(loss[i]);
+        rows[i].cells[6].innerText = display(totals[i]);
+        rows[i].cells[7].innerText = display(accumulated);
+    }
+
+    let finalTotal = accumulated + contTotal;
+    let check = finalTotal - target;
+
+    document.getElementById("report").innerHTML = `
+        Total Lotes: ${display(accumulated)} <br>
+        Contenedores: ${display(contTotal)} <br>
+        FINAL: ${display(finalTotal)} <br>
+        Target: ${target} <br>
+        Pérdida Total: ${display(lossTotal)} <br>
+        Check: <span class="${Math.abs(check) < 0.0001 ? 'good' : 'bad'}">${display(check)}</span>
+    `;
+}
+
+</script>
+
+</body>
+</html>
